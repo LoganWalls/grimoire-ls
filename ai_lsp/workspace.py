@@ -1,13 +1,12 @@
-from urllib.parse import unquote_plus, urlparse
-import git
 import itertools as it
 import math
 from pathlib import Path
 from typing import Iterable, Iterator, List, Optional
+from urllib.parse import unquote_plus, urlparse
 
+import git
+from lsprotocol.types import Range
 from pydantic import BaseModel, computed_field
-
-from ai_lsp.server import AILanguageServer
 
 from . import language as lang
 from .logging import log
@@ -113,19 +112,12 @@ def uri_to_path(uri: str) -> Path:
     return Path(unquote_plus(urlparse(uri).path))
 
 
-def get_other_files_context(server: AILanguageServer, current_uri: str) -> List[str]:
-    """Returns a context string with the content of other files in the workspace."""
-    root = server.workspace.root_path
-    other_files = []
-    if root:
-        for p in visible_files(git.Repo(root), Path(root)):
-            language = lang.from_extension(p.suffix.lstrip("."))
-            uri = p.as_uri()
-            if uri == current_uri:
-                continue
-            content = server.workspace.get_text_document(uri).lines
-            if not content:
-                continue
-            other_files.append(language.path_comment(p.relative_to(root)))
-            other_files.extend(content)
-    return other_files
+def lines_from_range(
+    lines: List[str],
+    range_: Range,
+) -> List[str]:
+    lines = lines[range_.start.line : range_.end.line + 1]
+    if lines:
+        lines[0] = lines[0][range_.start.character :]
+        lines[-1] = lines[-1][: range_.end.character + 1]
+    return lines
