@@ -1,0 +1,6 @@
+__pycache__
+secrets.py
+.ipynb_*
+.direnv
+.rsyncignore
+.env
