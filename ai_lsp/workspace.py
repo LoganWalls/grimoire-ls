@@ -1,18 +1,20 @@
+from dataclasses import dataclass
+from functools import lru_cache
 import itertools as it
 import math
 from pathlib import Path
-from typing import Iterable, Iterator, List, Optional
+from typing import Dict, Iterable, Iterator, List, Optional
 from urllib.parse import unquote_plus, urlparse
 
 import git
 from lsprotocol.types import Range
-from pydantic import BaseModel, computed_field
 
 from . import language as lang
 from .logging import log
 
 
-class Indentation(BaseModel):
+@dataclass
+class Indentation:
     size: int
     char: str
     base_level: int = 0
@@ -39,7 +41,7 @@ class Indentation(BaseModel):
         size = math.gcd(*sizes)
         if size == 1:
             size = min(s for s in sizes if s > 0)
-        return Indentation(size=size, char=char, base_level=min(sizes) / size)
+        return cls(size=size, char=char, base_level=min(sizes) / size)
 
     def format(self, lines: List[str]) -> List[str]:
         """Aligns the lines to the current indentation."""
@@ -61,13 +63,13 @@ class Indentation(BaseModel):
         ]
 
 
-class Content(BaseModel):
+@dataclass
+class Content:
     content: str
-    language: lang.Language = lang.by_extension[".txt"]
+    language: lang.Language = lang.by_extension["txt"]
     source_uri: Optional[str] = None
 
-    @computed_field
-    @property
+    @lru_cache
     def indentation(self) -> Indentation:
         return Indentation.from_lines(self.content.splitlines())
 
@@ -105,6 +107,20 @@ def visible_files(repo: git.Repo, path: Path) -> Iterator[Path]:
     for d in subdirs:
         for p in visible_files(repo, d):
             yield p
+
+
+def workspace_file_contents(server) -> Dict[Path, List[str]]:
+    """Returns a dictionary mapping from each path in the workspace to its content.
+    Excludes empty files & hidden files, and respects .gitignore."""
+    root = server.workspace.root_path
+    files = {}
+    if root:
+        for p in visible_files(git.Repo(root), Path(root)):
+            uri = p.as_uri()
+            content = server.workspace.get_text_document(uri).lines
+            if content:
+                files[p] = content
+    return files
 
 
 def uri_to_path(uri: str) -> Path:
