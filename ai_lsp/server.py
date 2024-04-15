@@ -45,6 +45,8 @@ class AILanguageServer(LanguageServer):
         self,
         options: CompletionOptions,
     ):
+        """Creates a completion handler from a function that takes in a `CompletionParams` and returns a list of `CompletionItem`."""
+
         def decorator(f: Callable[[CompletionParams], Awaitable[List[CompletionItem]]]):
             async def wrapped(params: CompletionParams):
                 return CompletionList(

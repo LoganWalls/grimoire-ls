@@ -11,6 +11,7 @@
     withSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
+        inherit (pkgs) lib stdenv;
       in {
         devShells.${system}.default =
           pkgs.mkShell
@@ -18,12 +19,11 @@
             packages = [
               pkgs.python310
               pkgs.poetry
-              pkgs.stdenv.cc.cc
             ];
 
-            LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+            LD_LIBRARY_PATH = lib.optional stdenv.isLinux (pkgs.lib.makeLibraryPath [
               pkgs.stdenv.cc.cc
-            ];
+            ]);
 
             # Put the venv on the repo, so direnv can access it
             POETRY_VIRTUALENVS_IN_PROJECT = "true";

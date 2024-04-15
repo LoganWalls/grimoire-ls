@@ -41,7 +41,7 @@ class Indentation:
         size = math.gcd(*sizes)
         if size == 1:
             size = min(s for s in sizes if s > 0)
-        return cls(size=size, char=char, base_level=min(sizes) / size)
+        return cls(size=size, char=char, base_level=min(sizes) // size)
 
     def format(self, lines: List[str]) -> List[str]:
         """Aligns the lines to the current indentation."""

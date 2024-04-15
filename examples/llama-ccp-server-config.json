@@ -1,0 +1,34 @@
+{
+  "host": "localhost",
+  "port": 7777,
+  "models": [
+    {
+      "model": "../../Models/deepseek-coder-1.3b-base.Q4_K_M.gguf",
+      "model_alias": "deepseek-coder-base",
+      "n_gpu_layers": -1,
+      "offload_kqv": true,
+      "n_threads": 12,
+      "n_batch": 64,
+      "n_ctx": 16000
+    },
+    {
+      "model": "../../Models/deepseek-coder-6.7b-instruct.Q4_K_M.gguf",
+      "model_alias": "deepseek-coder-instruct",
+      "n_gpu_layers": -1,
+      "offload_kqv": true,
+      "n_threads": 12,
+      "n_batch": 64,
+      "n_ctx": 16000
+    },
+    {
+      "model": "../../Models/Hermes-2-Pro-Mistral-7B.Q4_K_M.gguf",
+      "model_alias": "hermes-2-pro",
+      "chat_format": "chatml",
+      "n_gpu_layers": -1,
+      "offload_kqv": true,
+      "n_threads": 12,
+      "n_batch": 64,
+      "n_ctx": 8000
+    }
+  ]
+}

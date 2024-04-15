@@ -48,4 +48,4 @@ def get_context(
             )
         )
 
-    return before_middle, after_middle, "".join(workspace_context)
+    return before_middle.lstrip(), after_middle.rstrip(), "".join(workspace_context)
