@@ -67,7 +67,8 @@ class Improvement(BaseModel):
     )
 
 
-@server.feature(TEXT_DOCUMENT_DID_SAVE)
+# Uncomment the following code to enable the style suggestions on save
+# @server.feature(TEXT_DOCUMENT_DID_SAVE)
 async def style_improvements(
     ls: AILanguageServer, params: DidOpenTextDocumentParams
 ) -> Optional[str]:
