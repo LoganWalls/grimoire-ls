@@ -12,15 +12,21 @@
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
         inherit (pkgs) lib stdenv;
+        # Use impure cc on Darwin so that python packages build correctly
+        mkShell =
+          if stdenv.isLinux
+          then pkgs.mkShell
+          else pkgs.mkShell.override {stdenv = pkgs.stdenvNoCC;};
       in {
         devShells.${system}.default =
-          pkgs.mkShell
+          mkShell
           {
             packages = with pkgs; [
               python310
               uv
             ];
-
+            # Build llama-cpp with Metal support on Darwin
+            CMAKE_ARGS = lib.optional (system == "aarch64-darwin") "-DLLAMA_METAL=on";
             LD_LIBRARY_PATH = lib.optional stdenv.isLinux (pkgs.lib.makeLibraryPath [
               pkgs.stdenv.cc.cc
             ]);
