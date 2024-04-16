@@ -66,14 +66,20 @@ class AILanguageServer(LanguageServer):
 
     @classmethod
     def from_config(cls) -> "AILanguageServer":
-        path = (
-            Path(
-                os.environ.get(
-                    "XDG_CONFIG_HOME", os.path.join(os.environ["HOME"], ".config")
+        # First try to load the config from the environment variable
+        path = os.environ.get("AI_LSP_CONFIG")
+        if path is None:
+            # Default to the XDG config directory
+            path = (
+                Path(
+                    os.environ.get(
+                        "XDG_CONFIG_HOME", os.path.join(os.environ["HOME"], ".config")
+                    )
                 )
+                / "ai_lsp/init.py"
             )
-            / "ai_lsp/init.py"
-        )
+
+        path = Path(path).expanduser().resolve()
         spec = importlib.util.spec_from_file_location("config", path)
         if spec is None:
             raise Exception(f"Could not load config from {path}")
