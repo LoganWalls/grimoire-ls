@@ -1,3 +1,5 @@
+"""This example uses the OpenAI API client to access local models running with Llama.cpp"""
+
 import re
 from lsprotocol.types import (
     TEXT_DOCUMENT_DID_SAVE,
@@ -20,26 +22,45 @@ from pydantic import BaseModel, Field
 import instructor
 
 server = GrimoireServer()
+# Note that the `api_key` is a dummy value (it is not required) for local models,
+# the `base_url` points to the local Llama.cpp server instead of the OpenAI API.
 oai_client = OpenAI(api_key="sk-blah", base_url="http://localhost:7777/v1")
 instr_client = instructor.from_openai(oai_client)
 
 
 @server.completion(CompletionOptions(trigger_characters=[" ", "\n"]))
 async def completions(params: CompletionParams):
+    """Uses a fill-in-the-middle completion prompt to provide LLM-generated code completions."""
+
+    # Use this helper to get the content of the current file before and after the cursor
+    # Optionally, you can include the entire workspace content if you think the model
+    # might benefit from more context (this will result in slower completions, though).
     before, after, workspace = cmp.get_context(
         server, params, include_workspace_context=False
     )
+
+    # Prompts are model-specific, so make sure to adapt the prompt to the model you are using
+    # Also note that not all models were trained to do fill-in-the-middle completions, so take
+    # that into account when choosing a model, or consider using only the `before` context.
     prompt = f"""{workspace}<｜fim▁begin｜>{before}<｜fim▁hole｜>{after}<｜fim▁end｜>"""
+
+    # The log function will write to an external log file for debugging
+    # You can control the location of the file with the `GRIMOIRE_LS_LOG` environment variable
     log("Prompt")
     log(prompt)
     response = oai_client.completions.create(
         top_p=0.9,
         best_of=3,
         seed=1234,
-        max_tokens=200,
+        # This corresponds to the model alias defined in the `llama-cpp-server-config.json` file
         model="deepseek-coder-base",
         prompt=prompt,
-        stop=["\n\n", "<|EOT|>"],
+        # You can adjust `max_tokens` and the `stop` sequences to allow shorter or longer completions
+        max_tokens=200,
+        stop=[
+            "\n\n",
+            "<|EOT|>",
+        ],
     )
     if not response.choices:
         return []
@@ -74,13 +95,21 @@ class Improvement(BaseModel):
 async def style_improvements(
     ls: GrimoireServer, params: DidOpenTextDocumentParams
 ) -> Optional[str]:
-    """Provide style suggestions for the code as diagnostics."""
+    """Provide style suggestions for the code as diagnostics.
+    This example combines two different models. It uses a code model `deepseek-coder-instruct` to
+    make suggestions about improvements. However, the code model is not designed to provide structured
+    outputs. So, we use the `hermes-pro-2` combined with the `instructor` library to convert the first
+    model's output into structured objects that we can return as diagnostics.
+    """
 
+    # Get the content of the current file
     code = "\n".join(ls.workspace.get_document(params.text_document.uri).lines)
+
+    # Again, make sure to adapt the prompt to the model you are using
     prompt = f"""<｜begin▁of▁sentence｜>You are a state of the art AI programming assistant.
     ### Instruction:
     Suggest stylistic improvements to this code.
-    ```python
+    ```
     {code}
     ```
     Only suggest things that improve the readability or maintainability of the code.
@@ -110,9 +139,9 @@ async def style_improvements(
 
     prompt = f"Extract the suggestions and line numbers:\n{suggestions}"
     improvements = instr_client.chat.completions.create_iterable(
-        model="hermes-2-pro",
+        model="hermes-2-pro",  # Note that the moodel name is different from the one used in the previous call
         messages=[{"role": "user", "content": prompt}],
-        response_model=Improvement,
+        response_model=Improvement,  # This specifies the expected output structure
     )
     diagnostics = []
     for imp in improvements:
@@ -129,6 +158,11 @@ async def style_improvements(
     ls.publish_diagnostics(params.text_document.uri, diagnostics)
 
 
+# A common use-case for LLMs is to replace content with some generated content based on the original.
+# To define a code action that does this, simply define a function that takes a string (the text to replace)
+# and returns a string (the replacement text), or `None` if no replacement is desired.
+# Then decotrate the function with the `@server.code_action_replace` decorator, specifying an id and a title
+# for the code action:
 @server.code_action_replace("simplify", "Simplify this code")
 async def simplify(text: str) -> Optional[str]:
     """A code action that uses a language model to simplify the code."""
@@ -149,14 +183,17 @@ async def simplify(text: str) -> Optional[str]:
         top_p=0.9,
         seed=1234,
         max_tokens=1000,
+        # Notice that the prompt includes the start of a code block and
+        # `stop` includes the closing triple backticks so we can ensure
+        # that the model will only generate code, and not other text.
         stop=["```", "<|EOT|>"],
     )
-    completion = ""
+    result = ""
     if response.choices:
-        completion = response.choices[0].text
-    if "```" in completion:
-        match = re.search(r"(.*?)```", completion)
+        result = response.choices[0].text
+    if "```" in result:
+        match = re.search(r"(.*?)```", result)
         if match:
-            completion = match.group(1)
+            result = match.group(1)
 
-    return completion or None
+    return result or None
