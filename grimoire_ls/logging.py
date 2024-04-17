@@ -1,6 +1,6 @@
 from pathlib import Path
 
-path = Path("~/Projects/ai_lsp/ai_lsp.log").expanduser()
+path = Path("~/Projects/grimoire_ls/grimoire_ls.log").expanduser()
 path.write_text("")
 
 

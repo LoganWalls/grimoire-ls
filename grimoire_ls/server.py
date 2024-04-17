@@ -18,7 +18,10 @@ from pygls.server import LanguageServer
 from . import code_actions
 
 
-class AILanguageServer(LanguageServer):
+class GrimoireServer(LanguageServer):
+    def __init__(self, name: str = "grimoire-ls", version: str = "v0.1", **kwargs):
+        super().__init__(name, version, **kwargs)
+
     def code_action_replace(
         self,
         id_: str,
@@ -65,9 +68,9 @@ class AILanguageServer(LanguageServer):
         return decorator
 
     @classmethod
-    def from_config(cls) -> "AILanguageServer":
+    def from_config(cls) -> "GrimoireServer":
         # First try to load the config from the environment variable
-        path = os.environ.get("AI_LSP_CONFIG")
+        path = os.environ.get("GRIMOIRE_LS_HOME")
         if path is None:
             # Default to the XDG config directory
             path = (
@@ -76,10 +79,10 @@ class AILanguageServer(LanguageServer):
                         "XDG_CONFIG_HOME", os.path.join(os.environ["HOME"], ".config")
                     )
                 )
-                / "ai_lsp/init.py"
+                / "grimoire-ls"
             )
 
-        path = Path(path).expanduser().resolve()
+        path = Path(path).expanduser().resolve() / "init.py"
         spec = importlib.util.spec_from_file_location("config", path)
         if spec is None:
             raise Exception(f"Could not load config from {path}")

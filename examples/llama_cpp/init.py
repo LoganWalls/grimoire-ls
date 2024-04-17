@@ -13,13 +13,13 @@ from lsprotocol.types import (
 )
 from typing import Optional
 from openai import OpenAI
-from ai_lsp.server import AILanguageServer
-from ai_lsp.logging import log
-from ai_lsp import completion as cmp
+from grimoire_ls.server import GrimoireServer
+from grimoire_ls.logging import log
+from grimoire_ls import completion as cmp
 from pydantic import BaseModel, Field
 import instructor
 
-server = AILanguageServer("ai-lsp", "v0.1")
+server = GrimoireServer()
 oai_client = OpenAI(api_key="sk-blah", base_url="http://localhost:7777/v1")
 instr_client = instructor.from_openai(oai_client)
 
@@ -55,6 +55,7 @@ async def completions(params: CompletionParams):
     ]
 
 
+# Used with with `instructor` to extract structured outputs from the language model.
 class Improvement(BaseModel):
     start_line: int = Field(
         description="The first line number related to the suggestion"
@@ -67,11 +68,14 @@ class Improvement(BaseModel):
     )
 
 
-# Uncomment the following code to enable the style suggestions on save
+# This is expensive, so it's disabled by default
+# Uncomment to enable the style suggestions on save
 # @server.feature(TEXT_DOCUMENT_DID_SAVE)
 async def style_improvements(
-    ls: AILanguageServer, params: DidOpenTextDocumentParams
+    ls: GrimoireServer, params: DidOpenTextDocumentParams
 ) -> Optional[str]:
+    """Provide style suggestions for the code as diagnostics."""
+
     code = "\n".join(ls.workspace.get_document(params.text_document.uri).lines)
     prompt = f"""<｜begin▁of▁sentence｜>You are a state of the art AI programming assistant.
     ### Instruction:
@@ -122,12 +126,13 @@ async def style_improvements(
                 severity=DiagnosticSeverity.Hint,
             )
         )
-    log("Completed diagnostics!")
     ls.publish_diagnostics(params.text_document.uri, diagnostics)
 
 
 @server.code_action_replace("simplify", "Simplify this code")
 async def simplify(text: str) -> Optional[str]:
+    """A code action that uses a language model to simplify the code."""
+
     prompt = f"""<｜begin▁of▁sentence｜>You are a state of the art AI programming assistant.
     ### Instruction:
     Simplify the code as much as possible while preserving the original functionality.
@@ -137,9 +142,6 @@ async def simplify(text: str) -> Optional[str]:
     ### Response:
     ```
     """
-    log("Prompt:")
-    log(prompt)
-    log("")
     response = oai_client.completions.create(
         model="deepseek-coder-instruct",
         prompt=prompt,

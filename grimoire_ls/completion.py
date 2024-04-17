@@ -1,13 +1,13 @@
 from typing import Tuple
 
 from lsprotocol.types import CompletionParams
-from ai_lsp.server import AILanguageServer
+from grimoire_ls.server import GrimoireServer
 from . import workspace as wrk
 from . import language as lang
 
 
 def get_context(
-    server: AILanguageServer,
+    server: GrimoireServer,
     params: CompletionParams,
     include_workspace_context: bool = False,
 ) -> Tuple[str, str, str]:

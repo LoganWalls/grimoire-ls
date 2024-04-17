@@ -1,7 +1,7 @@
 [project]
-name = "ai-lsp"
+name = "grimoire-ls"
 version = "0.1.0"
-description = "A highly scriptable, AI-powered personal language server"
+description = "A highly scriptable, AI-powered, personal language server"
 authors = [
   { name = "Logan Walls", email = "2934282+LoganWalls@users.noreply.github.com" },
 ]
