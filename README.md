@@ -31,7 +31,7 @@ Then configure your editor to use the server:
 ```lua
 nvim_create_augroup("grimoire-ls", { clear = true })
 nvim_create_autocmd("BufEnter", {
-  group = "",
+  group = "grimoire-ls",
   pattern = ""
   callback = function()
 	vim.lsp.start({
