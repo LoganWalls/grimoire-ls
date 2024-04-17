@@ -1,4 +1,5 @@
 {
+  description = "Write your own AI-powered personal language server";
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   };
