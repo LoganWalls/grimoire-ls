@@ -2,7 +2,8 @@
 This example uses the official OpenAI client, but connects to local models served by `llama-cpp-python`.
 
 ## Installation (Dependencies)
-*Note: you must first install `grimoire-ls` first before attempting to install this example*
+> [!NOTE] You must first install `grimoire-ls` first before attempting to install this example
+
 Enter this directory and then follow the instructions depending on how you want to run the models.
 
 ### CPU
