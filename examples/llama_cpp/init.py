@@ -15,6 +15,7 @@ from lsprotocol.types import (
 )
 from typing import Optional
 from openai import OpenAI
+from result import Err, Ok, Result
 from grimoire_ls.server import GrimoireServer
 from grimoire_ls.logging import log
 from grimoire_ls import completion as cmp
@@ -29,7 +30,7 @@ instr_client = instructor.from_openai(oai_client)
 
 
 @server.completion(CompletionOptions(trigger_characters=[" ", "\n"]))
-async def completions(params: CompletionParams):
+async def completions(params: CompletionParams) -> Result[list[CompletionItem], str]:
     """Uses a fill-in-the-middle completion prompt to provide LLM-generated code completions."""
 
     # Use this helper to get the content of the current file before and after the cursor
@@ -63,17 +64,22 @@ async def completions(params: CompletionParams):
         ],
     )
     if not response.choices:
-        return []
+        # Note that we are using the `Err` and `Ok` types from the `result` library
+        return Err("Could not generate completions.")
     completion = response.choices[0].text
     log("Completion:")
     log(completion)
-    return [
-        CompletionItem(
-            label=completion,
-            text_edit_text=completion,
-            kind=CompletionItemKind.Text,
-        ),
-    ]
+
+    # Note that we are using the `Err` and `Ok` types from the `result` library
+    return Ok(
+        [
+            CompletionItem(
+                label=completion,
+                text_edit_text=completion,
+                kind=CompletionItemKind.Text,
+            ),
+        ]
+    )
 
 
 # Used with with `instructor` to extract structured outputs from the language model.
