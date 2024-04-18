@@ -23,7 +23,7 @@
           mkShell
           {
             packages = with pkgs; [
-              python310
+              python311
               uv
             ];
             # Build llama-cpp with Metal support on Darwin
