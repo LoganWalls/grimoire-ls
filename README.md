@@ -50,6 +50,11 @@ nvim_create_autocmd("BufEnter", {
 ## Emacs
 (Coming soon)
 
+# Upgrading to the latest version
+In your cloned repository:
+1. `git pull`
+2. `uv pip install --upgrade .`
+
 # Usage
 The simplest grimoire is a single python file called `init.py`. You can
 indicate where your `init.py` is saved in the following ways (in order
