@@ -12,9 +12,9 @@ class Language:
     comment_suffix: str = ""
 
     @lru_cache
-    def path_comment(
+    def uncomment(
         self,
-        path: Path,
+        content: str,
         prefix: Optional[str] = None,
         suffix: Optional[str] = None,
     ) -> str:
@@ -22,7 +22,20 @@ class Language:
             prefix = self.comment_prefix
         if suffix is None:
             suffix = self.comment_suffix
-        return f"\n{prefix}{path}{suffix}\n"
+        return content.removeprefix(prefix).removesuffix(suffix)
+
+    @lru_cache
+    def comment(
+        self,
+        content: str | Path,
+        prefix: Optional[str] = None,
+        suffix: Optional[str] = None,
+    ) -> str:
+        if prefix is None:
+            prefix = self.comment_prefix
+        if suffix is None:
+            suffix = self.comment_suffix
+        return f"{prefix}{content}{suffix}"
 
 
 all_languages: List[Language] = [
@@ -69,7 +82,7 @@ by_extension: Dict[str, Language] = {
 
 
 def from_extension(ext: str) -> Language:
-    return by_extension.get(ext, by_extension["txt"])
+    return by_extension.get(ext.lstrip("."), by_extension["txt"])
 
 
 def register(language: Language):

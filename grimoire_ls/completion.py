@@ -31,21 +31,17 @@ def get_context(
     if include_workspace_context:
         for p, content in wrk.workspace_file_contents(server).items():
             if p != path:
-                language = lang.from_extension(p.suffix.lstrip("."))
+                language = lang.from_extension(p.suffix)
                 workspace_context.append(
-                    language.path_comment(
-                        p.relative_to(server.workspace.root_path or p.parent)
-                    )
+                    f"\n{language.comment(p.relative_to(server.workspace.root_path or p.parent))}\n"
                 )
                 workspace_context.extend(content)
 
     if workspace_context:
         #  Add a comment to delimit the current file
-        language = lang.from_extension(path.suffix.lstrip("."))
+        language = lang.from_extension(path.suffix)
         workspace_context.append(
-            language.path_comment(
-                path.relative_to(server.workspace.root_path or path.parent)
-            )
+            f"\n{language.comment(path.relative_to(server.workspace.root_path or path.parent))}\n"
         )
 
     return before_middle.lstrip(), after_middle.rstrip(), "".join(workspace_context)

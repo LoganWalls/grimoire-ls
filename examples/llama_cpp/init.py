@@ -16,6 +16,7 @@ from lsprotocol.types import (
 from typing import Optional
 from openai import OpenAI
 from result import Err, Ok, Result
+from grimoire_ls.code_actions import ActionOptions, ActionParams
 from grimoire_ls.server import GrimoireServer
 from grimoire_ls.logging import log
 from grimoire_ls import completion as cmp
@@ -164,13 +165,8 @@ async def style_improvements(
     ls.publish_diagnostics(params.text_document.uri, diagnostics)
 
 
-# A common use-case for LLMs is to replace content with some generated content based on the original.
-# To define a code action that does this, simply define a function that takes a string (the text to replace)
-# and returns a string (the replacement text), or `None` if no replacement is desired.
-# Then decotrate the function with the `@server.code_action_replace` decorator, specifying an id and a title
-# for the code action:
-@server.code_action_replace("simplify", "Simplify this code")
-async def simplify(text: str) -> Optional[str]:
+@server.code_action(ActionOptions(id="simplify", title="Simplify this code"))
+async def simplify(text: str, _) -> Result[str, str]:
     """A code action that uses a language model to simplify the code."""
 
     prompt = f"""<｜begin▁of▁sentence｜>You are a state of the art AI programming assistant.
@@ -188,6 +184,7 @@ async def simplify(text: str) -> Optional[str]:
         best_of=3,
         top_p=0.9,
         seed=1234,
+        temperature=0.1,
         max_tokens=1000,
         # Notice that the prompt includes the start of a code block and
         # `stop` includes the closing triple backticks so we can ensure
@@ -201,5 +198,64 @@ async def simplify(text: str) -> Optional[str]:
         match = re.search(r"(.*?)```", result)
         if match:
             result = match.group(1)
+    if not result:
+        return Err("Could not simplify the code.")
 
-    return result or None
+    return Ok(result)
+
+
+# This class defines the parameters for the action
+class CustomInstructionParams(ActionParams):
+    instruction: str
+    best_of: int = 3
+    top_p: float = 0.9
+    seed: int = 1234
+    temperature: float = 0.1
+    max_tokens: int = 1000
+
+
+@server.code_action(
+    ActionOptions(
+        id="custom_instruction",
+        title="Custom instruction",
+        params=CustomInstructionParams,
+        log=True,
+    )
+)
+async def custom_instruction(
+    text: str, params: CustomInstructionParams
+) -> Result[str, str]:
+    """A code action that uses a language model to simplify the code."""
+
+    # NOTE: using a """ f-string broke python indentation for this example
+    # So we use a " string split into multiple lines instead
+    prompt = (
+        "<｜begin▁of▁sentence｜>You are a state of the art AI programming assistant.\n"
+        "### Instruction:\n"
+        f"{params.instruction}\n"
+        f"```\n{text}\n```"
+        "### Response:\n```\n"
+    )
+    log(prompt)
+    response = oai_client.completions.create(
+        model="deepseek-coder-instruct",
+        prompt=prompt,
+        best_of=params.best_of,
+        top_p=params.top_p,
+        seed=1234,
+        temperature=params.temperature,
+        max_tokens=params.max_tokens,
+        stop=["```", "<|EOT|>"],
+    )
+    result = ""
+    if response.choices:
+        result = response.choices[0].text
+    if "```" in result:
+        match = re.search(r"(.*?)```", result)
+        if match:
+            result = match.group(1)
+    if not result:
+        log("Failed result:\n")
+        return Err("Could not execute instruction.")
+
+    return Ok(result)

@@ -1,13 +1,16 @@
-from functools import wraps
 import importlib.util
 import os
-from uuid import uuid4
+from functools import wraps
 from pathlib import Path
-from typing import Awaitable, Callable, Dict, List, Optional
-from result import Err, Ok, Result
+from typing import Awaitable, Callable, List, Optional
+from uuid import uuid4
 
 from lsprotocol.types import (
+    TEXT_DOCUMENT_CODE_ACTION,
     TEXT_DOCUMENT_COMPLETION,
+    CodeAction,
+    CodeActionParams,
+    Command,
     CompletionItem,
     CompletionList,
     CompletionListItemDefaultsType,
@@ -19,14 +22,16 @@ from lsprotocol.types import (
     WorkDoneProgressEnd,
 )
 from pygls.server import LanguageServer
+from result import Err, Ok, Result
 
 from . import code_actions
+from .code_actions import ActionOptions
 from .progress import ProgressOptions
 
 
 class GrimoireServer(LanguageServer):
-    progress_tokens: Dict[str, str]
     default_progress_options: ProgressOptions
+    code_actions: list[ActionOptions]
 
     def __init__(
         self,
@@ -35,6 +40,7 @@ class GrimoireServer(LanguageServer):
         default_progress_options: ProgressOptions = ProgressOptions(),
         **kwargs,
     ):
+        self.code_actions = []
         self.default_progress_options = default_progress_options
         super().__init__(name, version, **kwargs)
 
@@ -78,27 +84,51 @@ class GrimoireServer(LanguageServer):
 
         return decorator
 
-    def code_action_replace(
+    def code_action(
         self,
-        id_: str,
-        title: str,
-        command_kwargs: Optional[dict] = None,
-        code_action_kwargs: Optional[dict] = None,
+        options: ActionOptions,
+        progress: Optional[ProgressOptions] = None,
     ):
-        """Creates a code action from a function that takes in a string and returns a string that should replace it."""
-        code_action_kwargs = command_kwargs or {}
-        code_action_kwargs.setdefault("title", title)
+        """Creates a code action from a user-defined function."""
+        progress_ = progress or self.default_progress_options
 
         def decorator(f):
-            return code_actions.replace_content_wrapper(
-                self,
-                f,
-                id_,
-                command_kwargs,
-                code_action_kwargs,
-            )
+            progress = progress_  # Ugly hack to make pyright happy
+            if progress.task_name is None:
+                progress = progress.with_attrs(task_name=f.__name__)
+            f = self.with_progress(progress)(f)
+
+            # Register the function as an LSP command
+            f = code_actions.wrap_transform(f, options)
+            self.command(options.id)(f)
+            self.code_actions.append(options)
+            return f
 
         return decorator
+
+    def _register_code_actions(self):
+        @self.feature(TEXT_DOCUMENT_CODE_ACTION)
+        async def _(params: CodeActionParams):
+            uri = params.text_document.uri
+            start = params.range.start
+            end = params.range.end
+            return [
+                CodeAction(
+                    command=Command(
+                        command=action_opts.id,
+                        arguments=[
+                            uri,
+                            start.line,
+                            start.character,
+                            end.line,
+                            end.character,
+                        ],
+                        **action_opts.command_kwargs,
+                    ),
+                    **action_opts.code_action_kwargs,
+                )
+                for action_opts in self.code_actions
+            ]
 
     def completion(
         self,
@@ -165,4 +195,5 @@ class GrimoireServer(LanguageServer):
         server = config.server
         if not isinstance(server, cls):
             raise Exception(f"Expected `server` to be type {cls}, got {type(server)}")
+        server._register_code_actions()
         return server

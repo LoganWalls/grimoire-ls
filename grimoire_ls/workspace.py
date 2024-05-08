@@ -35,9 +35,6 @@ class Indentation:
                 level += 1
             sizes.append(level)
 
-        log(lines)
-        log(sizes)
-
         size = math.gcd(*sizes)
         if size == 1:
             size = min(s for s in sizes if s > 0)
