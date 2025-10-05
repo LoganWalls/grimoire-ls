@@ -2,7 +2,8 @@ import importlib.util
 import os
 from functools import wraps
 from pathlib import Path
-from typing import Awaitable, Callable, List, Optional
+from collections.abc import Awaitable
+from typing import Any, Callable
 from uuid import uuid4
 
 from lsprotocol.types import (
@@ -24,8 +25,8 @@ from lsprotocol.types import (
 from pygls.server import LanguageServer
 from result import Err, Ok, Result
 
-from . import code_actions
-from .code_actions import ActionOptions
+from . import code_actions, logging
+from .code_actions import ActionOptions, TransformFn
 from .progress import ProgressOptions
 
 
@@ -37,14 +38,14 @@ class GrimoireServer(LanguageServer):
         self,
         name: str = "grimoire-ls",
         version: str = "v0.1",
-        default_progress_options: ProgressOptions = ProgressOptions(),
-        **kwargs,
+        default_progress_options: ProgressOptions | None = None,
+        **kwargs: Any,
     ):
         self.code_actions = []
-        self.default_progress_options = default_progress_options
+        self.default_progress_options = default_progress_options or ProgressOptions()
         super().__init__(name, version, **kwargs)
 
-    def with_progress(self, options: Optional[ProgressOptions] = None):
+    def with_progress(self, options: ProgressOptions | None = None):
         """This decorator will report the status of the request (pending, completed, failed) to the client"""
         options_ = options or self.default_progress_options
 
@@ -56,9 +57,9 @@ class GrimoireServer(LanguageServer):
                 return f
 
             @wraps(f)
-            async def wrapped(*args, **kwargs):
+            async def wrapped(*args: tuple[Any, ...], **kwargs: dict[str, Any]):
                 token = str(uuid4())
-                await self.progress.create_async(token)
+                _ = await self.progress.create_async(token)  # pyright: ignore[reportUnknownVariableType]
                 self.progress.begin(
                     token,
                     WorkDoneProgressBegin(
@@ -87,22 +88,21 @@ class GrimoireServer(LanguageServer):
     def code_action(
         self,
         options: ActionOptions,
-        progress: Optional[ProgressOptions] = None,
+        progress: ProgressOptions | None = None,
     ):
         """Creates a code action from a user-defined function."""
-        progress_ = progress or self.default_progress_options
 
-        def decorator(f):
-            progress = progress_  # Ugly hack to make pyright happy
-            if progress.task_name is None:
-                progress = progress.with_attrs(task_name=f.__name__)
-            f = self.with_progress(progress)(f)
+        def decorator(f: TransformFn):
+            progress_ = progress or self.default_progress_options
+            if progress_.task_name is None:
+                progress_ = progress_.with_attrs(task_name=f.__name__)
+            f = self.with_progress(progress_)(f)
 
             # Register the function as an LSP command
-            f = code_actions.wrap_transform(f, options)
-            self.command(options.id)(f)
+            wrapped_f = code_actions.wrap_transform(f, options)
+            _ = self.command(options.id)(wrapped_f)
             self.code_actions.append(options)
-            return f
+            return wrapped_f
 
         return decorator
 
@@ -133,26 +133,27 @@ class GrimoireServer(LanguageServer):
     def completion(
         self,
         options: CompletionOptions,
-        progress: Optional[ProgressOptions] = None,
+        progress: ProgressOptions | None = None,
     ):
         """Creates a completion handler from a user-defined function"""
-        progress_ = progress or self.default_progress_options
 
         def decorator(
             f: Callable[
-                [CompletionParams], Awaitable[Result[List[CompletionItem], str]]
+                [CompletionParams], Awaitable[Result[list[CompletionItem], str]]
             ],
         ):
-            progress = progress_  # Ugly hack to make pyright happy
-            if progress.task_name is None:
-                progress = progress.with_attrs(task_name=f.__name__)
+            progress_ = progress or self.default_progress_options
+            if progress_.task_name is None:
+                progress_ = progress_.with_attrs(task_name=f.__name__)
 
             async def wrapped(params: CompletionParams):
-                g = self.with_progress(progress)(f)
-                items = []
-                match await g(params):
+                f_with_progress = self.with_progress(progress_)(f)
+                items: list[CompletionItem] = []
+                match await f_with_progress(params):
                     case Ok(v):
                         items = v
+                    case Err(e):
+                        logging.log(e)
 
                 return CompletionList(
                     is_incomplete=False,

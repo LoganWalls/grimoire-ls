@@ -24,3 +24,8 @@ build-backend = "hatchling.build"
 
 [tool.ruff.lint]
 ignore = ["F722"]
+
+[tool.pyright]
+reportExplicitAny = false
+reportAny = false
+reportUnknownMemberType = false

@@ -1,5 +1,3 @@
-from typing import Tuple
-
 from lsprotocol.types import CompletionParams
 from grimoire_ls.server import GrimoireServer
 from . import workspace as wrk
@@ -10,7 +8,7 @@ def get_context(
     server: GrimoireServer,
     params: CompletionParams,
     include_workspace_context: bool = False,
-) -> Tuple[str, str, str]:
+) -> tuple[str, str, str]:
     """Returns the content of current file before and after the cursor position.
     If `include_workspace_context` is `True`, the third return value will be the
     content of all other files in the workspace, delimited by comments with their
@@ -27,7 +25,7 @@ def get_context(
     after_middle = "".join([cur_line[col:]] + lines[line_no + 1 :])
 
     path = wrk.uri_to_path(uri)
-    workspace_context = []
+    workspace_context: list[str] = []
     if include_workspace_context:
         for p, content in wrk.workspace_file_contents(server).items():
             if p != path:

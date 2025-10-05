@@ -1,13 +1,15 @@
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from functools import lru_cache
 import itertools as it
 import math
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional
 from urllib.parse import unquote_plus, urlparse
 
 import git
 from lsprotocol.types import Range
+
+from grimoire_ls.server import GrimoireServer
 
 from . import language as lang
 from .logging import log
@@ -20,13 +22,13 @@ class Indentation:
     base_level: int = 0
 
     @classmethod
-    def from_lines(cls, lines: List[str]) -> "Indentation":
+    def from_lines(cls, lines: list[str]) -> "Indentation":
         """Infers the indentation from lines."""
         if not lines:
             return Indentation(size=2, char=" ", base_level=0)
 
         char = " "
-        sizes = []
+        sizes: list[int] = []
         for line in lines:
             level = 0
             for c in it.takewhile(str.isspace, line):
@@ -40,7 +42,7 @@ class Indentation:
             size = min(s for s in sizes if s > 0)
         return cls(size=size, char=char, base_level=min(sizes) // size)
 
-    def format(self, lines: List[str]) -> List[str]:
+    def format(self, lines: list[str]) -> list[str]:
         """Aligns the lines to the current indentation."""
         if not lines:
             return lines
@@ -64,7 +66,7 @@ class Indentation:
 class Content:
     content: str
     language: lang.Language = lang.by_extension["txt"]
-    source_uri: Optional[str] = None
+    source_uri: str | None = None
 
     @lru_cache
     def indentation(self) -> Indentation:
@@ -74,8 +76,8 @@ class Content:
 def filter_paths(
     repo: git.Repo,
     paths: Iterable[Path],
-    ignored_extensions: Optional[List[str]] = None,
-) -> List[Path]:
+    ignored_extensions: list[str] | None = None,
+) -> list[Path]:
     ignored_extensions = ignored_extensions or [
         ".lock",
         ".git",
@@ -95,7 +97,7 @@ def filter_paths(
 
 def visible_files(repo: git.Repo, path: Path) -> Iterator[Path]:
     """Yields files in a directory, respecting .gitignore and excluding hidden files."""
-    subdirs = []
+    subdirs: list[Path] = []
     for p in filter_paths(repo, path.iterdir()):
         if p.is_file():
             yield p
@@ -106,11 +108,11 @@ def visible_files(repo: git.Repo, path: Path) -> Iterator[Path]:
             yield p
 
 
-def workspace_file_contents(server) -> Dict[Path, List[str]]:
+def workspace_file_contents(server: "GrimoireServer") -> dict[Path, list[str]]:
     """Returns a dictionary mapping from each path in the workspace to its content.
     Excludes empty files & hidden files, and respects .gitignore."""
     root = server.workspace.root_path
-    files = {}
+    files: dict[Path, list[str]] = {}
     if root:
         for p in visible_files(git.Repo(root), Path(root)):
             uri = p.as_uri()
@@ -126,9 +128,9 @@ def uri_to_path(uri: str) -> Path:
 
 
 def lines_from_range(
-    lines: List[str],
+    lines: list[str],
     range_: Range,
-) -> List[str]:
+) -> list[str]:
     lines = lines[range_.start.line : range_.end.line + 1]
     if lines:
         lines[0] = lines[0][range_.start.character :]

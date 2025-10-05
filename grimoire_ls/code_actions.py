@@ -1,7 +1,7 @@
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Awaitable
 from enum import Enum
-from typing import Awaitable, ClassVar, Optional
+from typing import ClassVar, Any
 
 from lsprotocol.types import (
     CodeActionKind,
@@ -13,6 +13,8 @@ from lsprotocol.types import (
 )
 from pydantic import BaseModel, Field, ValidationError
 from result import Err, Ok, Result
+
+from grimoire_ls.server import GrimoireServer
 
 from . import language as lang
 from . import workspace as wrk
@@ -84,11 +86,11 @@ class GrimoireActionType(Enum):
 
 class ActionOptions(BaseModel):
     id: str
-    title: Optional[str] = None
+    title: str | None = None
     action: GrimoireActionType = GrimoireActionType.replace
-    params: Optional[type[ActionParams]] = None
-    command_kwargs: dict = Field(default_factory=dict)
-    code_action_kwargs: dict = Field(default_factory=dict)
+    params: type[ActionParams] | None = None
+    command_kwargs: dict[str, Any] = Field(default_factory=dict)
+    code_action_kwargs: dict[str, Any] = Field(default_factory=dict)
     log: bool = False
 
     def model_post_init(self, _):
@@ -98,7 +100,7 @@ class ActionOptions(BaseModel):
         self.code_action_kwargs.setdefault("kind", CodeActionKind.RefactorRewrite)
 
 
-TransformFn = Callable[[str, Optional[ActionParams]], Awaitable[Result[str, str]]]
+TransformFn = Callable[[str, ActionParams | None], Awaitable[Result[str, str]]]
 
 
 def wrap_transform(
@@ -108,7 +110,7 @@ def wrap_transform(
     """Creates a code action from a function that takes in a string and returns a string."""
 
     # NOTE: `ls` variable name cannot be changed. It is hard-coded in pygls
-    async def wrapped(ls, args: tuple[str, int, int, int, int]):
+    async def wrapped(ls: "GrimoireServer", args: tuple[str, int, int, int, int]):
         uri, start_line, start_col, end_line, end_col = args
         document = ls.workspace.get_document(uri)
         range_ = Range(Position(start_line, start_col), Position(end_line, end_col))
