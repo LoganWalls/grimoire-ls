@@ -23,7 +23,7 @@
           mkShell
           {
             packages = with pkgs; [
-              python311
+              python312
               uv
             ];
             # Build llama-cpp with Metal support on Darwin
@@ -37,7 +37,7 @@
 
             shellHook = ''
               if [ ! -d .venv ]; then
-                uv venv
+                uv venv --python=3.12
                 uv pip install -e .
               fi
               source .venv/bin/activate
