@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import re
-from collections.abc import Callable, Awaitable
+from collections.abc import Awaitable, Callable
 from enum import Enum
-from typing import ClassVar, Any
+from typing import TYPE_CHECKING, Any, ClassVar, override
 
 from lsprotocol.types import (
     CodeActionKind,
@@ -14,11 +16,12 @@ from lsprotocol.types import (
 from pydantic import BaseModel, Field, ValidationError
 from result import Err, Ok, Result
 
-from grimoire_ls.server import GrimoireServer
-
 from . import language as lang
 from . import workspace as wrk
 from .logging import log
+
+if TYPE_CHECKING:
+    from .server import GrimoireServer
 
 
 class ActionParams(BaseModel):
@@ -63,7 +66,7 @@ class ActionParams(BaseModel):
     ) -> tuple[Result["ActionParams", str], list[str]]:
         """Extract the parameters from the beginning of `lines` and return the remaining lines."""
         i = 0
-        param_lines = []
+        param_lines: list[str] = []
         for i, line in enumerate(lines):
             line = language.uncomment(line.strip()).strip()
             if i == 0:
@@ -93,6 +96,7 @@ class ActionOptions(BaseModel):
     code_action_kwargs: dict[str, Any] = Field(default_factory=dict)
     log: bool = False
 
+    @override
     def model_post_init(self, _):
         self.title = self.title or self.id
         self.code_action_kwargs.setdefault("title", self.title)
@@ -110,7 +114,7 @@ def wrap_transform(
     """Creates a code action from a function that takes in a string and returns a string."""
 
     # NOTE: `ls` variable name cannot be changed. It is hard-coded in pygls
-    async def wrapped(ls: "GrimoireServer", args: tuple[str, int, int, int, int]):
+    async def wrapped(ls: GrimoireServer, args: tuple[str, int, int, int, int]):
         uri, start_line, start_col, end_line, end_col = args
         document = ls.workspace.get_document(uri)
         range_ = Range(Position(start_line, start_col), Position(end_line, end_col))
@@ -146,7 +150,7 @@ def wrap_transform(
                         ),
                         new_text="\n".join(template_lines),
                     )
-                    ls.apply_edit(WorkspaceEdit(changes={uri: [text_edit]}))
+                    _ = ls.apply_edit(WorkspaceEdit(changes={uri: [text_edit]}))
                     return
 
         text = "".join(lines).strip()
@@ -194,7 +198,7 @@ def wrap_transform(
                         new_text=result,
                     )
                 )
-                ls.apply_edit(WorkspaceEdit(changes={uri: edits}))
+                _ = ls.apply_edit(WorkspaceEdit(changes={uri: edits}))
             case Err(e):
                 if options.log:
                     log("!!!FAILED!!!\nResponse:")

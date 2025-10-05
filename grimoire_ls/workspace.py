@@ -1,15 +1,19 @@
+from __future__ import annotations
+
+import itertools as it
+import math
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from functools import lru_cache
-import itertools as it
-import math
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import unquote_plus, urlparse
 
 import git
 from lsprotocol.types import Range
 
-from grimoire_ls.server import GrimoireServer
+if TYPE_CHECKING:
+    from .server import GrimoireServer
 
 from . import language as lang
 from .logging import log
@@ -108,7 +112,7 @@ def visible_files(repo: git.Repo, path: Path) -> Iterator[Path]:
             yield p
 
 
-def workspace_file_contents(server: "GrimoireServer") -> dict[Path, list[str]]:
+def workspace_file_contents(server: GrimoireServer) -> dict[Path, list[str]]:
     """Returns a dictionary mapping from each path in the workspace to its content.
     Excludes empty files & hidden files, and respects .gitignore."""
     root = server.workspace.root_path

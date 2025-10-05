@@ -1,4 +1,4 @@
-from lsprotocol.types import CompletionParams
+from lsprotocol.types import CompletionParams, InlineCompletionParams
 from grimoire_ls.server import GrimoireServer
 from . import workspace as wrk
 from . import language as lang
@@ -6,7 +6,7 @@ from . import language as lang
 
 def get_context(
     server: GrimoireServer,
-    params: CompletionParams,
+    params: CompletionParams | InlineCompletionParams,
     include_workspace_context: bool = False,
 ) -> tuple[str, str, str]:
     """Returns the content of current file before and after the cursor position.
@@ -16,8 +16,8 @@ def get_context(
     uri = params.text_document.uri
 
     # Split the current line at the cursor position
-    document = server.workspace.get_document(uri)
-    lines = document.lines
+    document = server.workspace.text_documents[uri]
+    lines = list(document.lines)
     line_no = params.position.line
     col = params.position.character
     cur_line = lines[line_no]

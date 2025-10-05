@@ -1,28 +1,35 @@
+from __future__ import annotations
+
 import importlib.util
 import os
+from collections.abc import Awaitable
 from functools import wraps
 from pathlib import Path
-from collections.abc import Awaitable
 from typing import Any, Callable
 from uuid import uuid4
 
 from lsprotocol.types import (
     TEXT_DOCUMENT_CODE_ACTION,
     TEXT_DOCUMENT_COMPLETION,
+    TEXT_DOCUMENT_INLINE_COMPLETION,
     CodeAction,
     CodeActionParams,
     Command,
     CompletionItem,
     CompletionList,
-    CompletionListItemDefaultsType,
-    CompletionListItemDefaultsTypeEditRangeType1,
     CompletionOptions,
     CompletionParams,
+    CompletionItemDefaults,
+    EditRangeWithInsertReplace,
+    InlineCompletionItem,
+    InlineCompletionList,
+    InlineCompletionOptions,
+    InlineCompletionParams,
     Range,
     WorkDoneProgressBegin,
     WorkDoneProgressEnd,
 )
-from pygls.server import LanguageServer
+from pygls.lsp.server import LanguageServer
 from result import Err, Ok, Result
 
 from . import code_actions, logging
@@ -47,36 +54,35 @@ class GrimoireServer(LanguageServer):
 
     def with_progress(self, options: ProgressOptions | None = None):
         """This decorator will report the status of the request (pending, completed, failed) to the client"""
-        options_ = options or self.default_progress_options
 
         def decorator(
             f: Callable[..., Awaitable[Result[..., str]]],
         ) -> Callable[..., Awaitable[Result[..., str]]]:
-            options = options_  # Ugly hack to make pyright happy
-            if not options.enabled:
+            options_ = options or self.default_progress_options
+            if not options_.enabled:
                 return f
 
             @wraps(f)
             async def wrapped(*args: tuple[Any, ...], **kwargs: dict[str, Any]):
                 token = str(uuid4())
-                _ = await self.progress.create_async(token)  # pyright: ignore[reportUnknownVariableType]
-                self.progress.begin(
+                _ = await self.work_done_progress.create_async(token)  # pyright: ignore[reportUnknownVariableType]
+                self.work_done_progress.begin(
                     token,
                     WorkDoneProgressBegin(
-                        title=options.task_name or "Grimoire Task",
+                        title=options_.task_name or "Grimoire Task",
                         cancellable=False,
                     ),
                 )
                 result = await f(*args, **kwargs)
                 match result:
                     case Ok(_):
-                        self.progress.end(
-                            token, WorkDoneProgressEnd(message=options.success_message)
+                        self.work_done_progress.end(
+                            token, WorkDoneProgressEnd(message=options_.success_message)
                         )
                     case Err(e):
-                        self.progress.end(
+                        self.work_done_progress.end(
                             token,
-                            WorkDoneProgressEnd(message=options.failure_message or e),
+                            WorkDoneProgressEnd(message=options_.failure_message or e),
                         )
 
                 return result
@@ -130,6 +136,40 @@ class GrimoireServer(LanguageServer):
                 for action_opts in self.code_actions
             ]
 
+    def inline_completion(
+        self,
+        options: InlineCompletionOptions,
+        progress: ProgressOptions | None = None,
+    ):
+        """Creates a completion handler from a user-defined function"""
+
+        def decorator(
+            f: Callable[
+                [InlineCompletionParams],
+                Awaitable[Result[list[InlineCompletionItem], str]],
+            ],
+        ):
+            progress_ = progress or self.default_progress_options
+            if progress_.task_name is None:
+                progress_ = progress_.with_attrs(task_name=f.__name__)
+
+            async def wrapped(params: CompletionParams):
+                f_with_progress = self.with_progress(progress_)(f)
+                items: list[InlineCompletionItem] = []
+                match await f_with_progress(params):
+                    case Ok(v):
+                        items = v
+                    case Err(e):
+                        logging.log(e)
+
+                return InlineCompletionList(
+                    items=items,
+                )
+
+            return self.feature(TEXT_DOCUMENT_INLINE_COMPLETION, options)(wrapped)
+
+        return decorator
+
     def completion(
         self,
         options: CompletionOptions,
@@ -158,8 +198,8 @@ class GrimoireServer(LanguageServer):
                 return CompletionList(
                     is_incomplete=False,
                     items=items,
-                    item_defaults=CompletionListItemDefaultsType(
-                        edit_range=CompletionListItemDefaultsTypeEditRangeType1(
+                    item_defaults=CompletionItemDefaults(
+                        edit_range=EditRangeWithInsertReplace(
                             Range(params.position, params.position),
                             Range(params.position, params.position),
                         )
@@ -171,7 +211,7 @@ class GrimoireServer(LanguageServer):
         return decorator
 
     @classmethod
-    def from_config(cls) -> "GrimoireServer":
+    def from_config(cls) -> GrimoireServer:
         # First try to load the config from the environment variable
         path = os.environ.get("GRIMOIRE_LS_HOME")
         if path is None:
